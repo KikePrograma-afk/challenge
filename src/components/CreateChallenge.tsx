@@ -3,80 +3,76 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { CircleDollarSign, ChevronDown } from 'lucide-react';
 import { CHALLENGE_ABI } from '../contracts/abi'; // Asegúrate que esta ruta es correcta
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; // <-- La importación y el uso interno siguen igual
 
-// Interface para los datos del equipo que necesitamos de Supabase
+// Interface para los datos del equipo que necesitamos (sin cambios)
 interface Team {
   id: number;
-  Teams: string; // <-- CORREGIDO: Usa el nombre exacto de tu columna 'Teams'
+  Teams: string;
   player_ids: string[];
 }
 
 interface CreateChallengeProps {
-  // IMPORTANTE: Esta prop DEBE ser el UUID del usuario de Supabase Auth ('string')
-  // o null si no hay sesión. NO debe ser la dirección de la wallet 0x...
+  // IMPORTANTE: Esta prop DEBE ser el UUID del usuario ('string')
+  // o null si no hay sesión. (Sin cambios en la definición)
   account: string | null;
   contractAddress: string;
 }
 
 const CreateChallenge: React.FC<CreateChallengeProps> = ({
-  account, // Este DEBE ser el UUID de Supabase
+  account, // Este sigue siendo el UUID internamente
   contractAddress,
 }) => {
-  // Estados principales
+  // Estados principales (sin cambios)
   const [matchId, setMatchId] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
-  // Estados para la selección de equipos
+  // Estados para la selección de equipos (sin cambios)
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [playerIds, setPlayerIds] = useState<string[]>([]);
 
-  // --- Cargar equipos del usuario ---
+  // --- Cargar equipos del usuario (Lógica sin cambios, mensajes de estado modificados) ---
   useEffect(() => {
     const loadUserTeams = async () => {
-      // Validación: Asegura que 'account' sea un UUID válido antes de consultar
-      // Formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      // Validación interna (sin cambios)
       const isValidUuid = account && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(account);
 
       if (!isValidUuid) {
-          // Si no es un UUID válido (o es null), no intentar cargar equipos
-          console.warn("CreateChallenge: 'account' prop no es un UUID válido o es null. No se cargarán equipos.", account);
-          setUserTeams([]); // Limpiar equipos si el ID cambia a inválido/null
-          setSelectedTeamId(''); // Resetear selección
-          setPlayerIds([]); // Resetear IDs
-          setLoadingTeams(false); // Asegurar que no quede cargando
-          // Puedes opcionalmente poner un estado aquí para el usuario si el `account` no es null pero es inválido
-          // if (account) setStatus("Error interno: ID de usuario no válido.");
-          return;
+        // Mensaje genérico si el ID interno no es válido
+        if (account) console.warn("CreateChallenge: 'account' prop no es un UUID válido.", account);
+        setUserTeams([]);
+        setSelectedTeamId('');
+        setPlayerIds([]);
+        setLoadingTeams(false);
+        // No establecer estado de error aquí, el select lo manejará con "Debes iniciar sesión"
+        return;
       }
 
       // Si es un UUID válido, proceder a cargar
       setLoadingTeams(true);
-      setStatus('Cargando tus equipos...');
-      setUserTeams([]); // Limpiar antes de cargar nuevos equipos
+      setStatus('Cargando tus equipos...'); // Mensaje genérico
+      setUserTeams([]);
       setSelectedTeamId('');
       setPlayerIds([]);
       try {
-        console.log(`CreateChallenge: Cargando equipos para UUID: ${account}`); // Log para depuración
-        // CORREGIDO: Selecciona 'Teams' en lugar de 'name'
+        console.log(`CreateChallenge: Cargando equipos para usuario con ID interno: ${account}`); // Log interno
+        // Lógica de Supabase sin cambios
         const { data, error, status: reqStatus } = await supabase
           .from('teams')
-          .select('id, Teams, player_ids') // <--- CORREGIDO AQUÍ
-          .eq('user_id', account) // Filtra por el UUID del usuario logueado
+          .select('id, Teams, player_ids')
+          .eq('user_id', account)
           .order('created_at', { ascending: false });
 
-        console.log("CreateChallenge: Respuesta de Supabase:", { data, error, reqStatus }); // Log para depuración
+        console.log("CreateChallenge: Respuesta del servicio de datos:", { data, error, reqStatus }); // Log interno
 
         if (error) {
-            // Si hay error, lanzarlo para que lo capture el catch
-            console.error('CreateChallenge: Error directo de Supabase al cargar equipos:', error);
-            throw error;
+            console.error('CreateChallenge: Error directo del servicio de datos al cargar equipos:', error);
+            throw error; // Lanzar para el catch
         }
 
-        // Si no hay error, actualizar estado (data puede ser un array vacío si no hay equipos)
         setUserTeams(data || []);
         setStatus(''); // Limpiar estado si carga bien
         if (data && data.length === 0) {
@@ -85,59 +81,56 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
         }
 
       } catch (error: any) {
-        // Capturar errores (incluyendo el lanzado arriba)
         console.error('CreateChallenge: Error en catch al cargar equipos:', error);
-        // Mostrar error específico si es posible
+        // **MODIFICADO**: Mensajes de error genéricos para el usuario
          if (error?.code === 'PGRST100' || error?.message?.includes('400')) {
-             setStatus(`Error 400: No se pudieron cargar tus equipos (Problema con RLS o ID de usuario?).`);
+             setStatus(`Error 400: No se pudieron cargar tus equipos. Verifica tu conexión o permisos.`);
          } else if (error?.message?.includes("column") && error?.message?.includes("does not exist")) {
-              setStatus(`Error DB: La columna '${error.message.split('"')[1]}' no existe en la tabla 'teams'.`);
+              setStatus(`Error interno del servidor al buscar equipos.`);
          } else {
-            setStatus(`Error: No se pudieron cargar tus equipos (${error.message || 'desconocido'}).`);
+            // Mensaje genérico final, sin exponer detalles del error.message
+            setStatus(`Error: No se pudieron cargar tus equipos. Intenta de nuevo más tarde.`);
         }
-        setUserTeams([]); // Asegurarse de limpiar en caso de error
+        setUserTeams([]);
       } finally {
-        setLoadingTeams(false); // Quitar estado de carga
+        setLoadingTeams(false);
       }
     };
 
     loadUserTeams();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account]); // Se ejecuta SOLO cuando cambia el prop 'account' (el UUID de Supabase)
+  }, [account]); // Se ejecuta SOLO cuando cambia el prop 'account'
 
-  // --- Actualizar playerIds cuando se selecciona un equipo ---
+  // --- Actualizar playerIds cuando se selecciona un equipo (sin cambios) ---
   useEffect(() => {
     if (selectedTeamId) {
       const selectedTeamData = userTeams.find(team => team.id.toString() === selectedTeamId);
-      // Verifica que los player_ids existan, sean 6 y todos sean strings numéricos no vacíos
       if (selectedTeamData?.player_ids?.length === 6 && selectedTeamData.player_ids.every(id => typeof id === 'string' && /^\d+$/.test(id))) {
         setPlayerIds(selectedTeamData.player_ids);
         setStatus('');
         console.log("CreateChallenge: IDs cargados para equipo", selectedTeamId, ":", selectedTeamData.player_ids);
       } else if (selectedTeamData) {
-         setPlayerIds([]); // Limpiar si los IDs no son válidos
+         setPlayerIds([]);
          setStatus('Error: El equipo seleccionado no tiene 6 IDs de jugador válidos.');
          console.warn("CreateChallenge: IDs inválidos en equipo seleccionado:", selectedTeamData.player_ids);
       } else {
-         // Esto no debería pasar si selectedTeamId tiene un valor de la lista userTeams
          setPlayerIds([]);
          console.warn("CreateChallenge: No se encontró el equipo con ID", selectedTeamId, "en la lista cargada.");
       }
     } else {
-      setPlayerIds([]); // Limpiar si no hay selección
+      setPlayerIds([]);
     }
   }, [selectedTeamId, userTeams]);
 
-  // --- Handler para Crear Desafío ---
-  // (La lógica interna de este handler NO se modifica respecto a la versión anterior,
-  // ya que estaba correcta en cuanto a interacción blockchain y uso del team_id)
+  // --- Handler para Crear Desafío (Lógica sin cambios, mensajes de estado modificados) ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('');
 
      const isValidUuid = account && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(account);
     if (!isValidUuid) {
-      setStatus('Error: Sesión de Supabase no válida.');
+      // **MODIFICADO**: Mensaje genérico
+      setStatus('Error: Sesión de usuario no válida o expirada.');
       return;
     }
     if (!selectedTeamId || playerIds.length !== 6) {
@@ -145,12 +138,13 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
       return;
     }
     const finalMatchId = (matchId && /^\d+$/.test(matchId)) ? matchId : '0';
-    const numericSelectedTeamId = parseInt(selectedTeamId, 10); // Este es el ID del equipo que se envía a challenge_teams
+    const numericSelectedTeamId = parseInt(selectedTeamId, 10);
     if (!window.ethereum) { setStatus('Error: Instala MetaMask.'); return; }
 
     setLoading(true);
     setStatus('Preparando transacción...');
     try {
+      // Lógica Blockchain sin cambios
       const provider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
       if (!accounts || accounts.length === 0) throw new Error("MetaMask no conectada o sin cuentas.");
@@ -169,6 +163,7 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
       const receipt = await tx.wait(1);
 
       let newChallengeId = "???";
+      // Lógica para obtener ID del evento (sin cambios)
       if (receipt?.logs && challengeContract.interface) {
         try {
             const challengeCreatedEvent = receipt.logs
@@ -184,19 +179,23 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
       if (newChallengeId !== "???" && !isNaN(numericSelectedTeamId)) {
         setStatus('Guardando información del equipo...');
         try {
+          // Lógica de guardado en Supabase (sin cambios)
           const { error: linkError } = await supabase
             .from('challenge_teams')
-            .insert({ challenge_id: newChallengeId, team_id: numericSelectedTeamId }); // Usa numericSelectedTeamId
+            .insert({ challenge_id: newChallengeId, team_id: numericSelectedTeamId });
+
           if (linkError) {
-            console.error("Error guardando relación challenge-team en Supabase:", linkError);
-            setStatus(prev => `¡Éxito en blockchain! (Advertencia: no se guardó info equipo en DB: ${linkError.message})`);
+            console.error("Error guardando relación challenge-team en el servicio de datos:", linkError);
+            // **MODIFICADO**: Mensaje genérico para el usuario
+            setStatus(prev => `¡Éxito en blockchain! (Advertencia: no se pudo guardar la asociación del equipo.)`);
           } else {
-            console.log("Relación challenge-team guardada en Supabase.");
+            console.log("Relación challenge-team guardada en el servicio de datos.");
             setStatus(`¡Éxito! Desafío #${newChallengeId} creado y equipo asociado.`);
           }
         } catch (dbError: any) {
-          console.error("Excepción guardando relación en Supabase:", dbError);
-          setStatus(prev => `¡Éxito en blockchain! (Advertencia: error guardando info equipo en DB: ${dbError.message})`);
+          console.error("Excepción guardando relación en el servicio de datos:", dbError);
+           // **MODIFICADO**: Mensaje genérico para el usuario
+          setStatus(prev => `¡Éxito en blockchain! (Advertencia: ocurrió un error al guardar la asociación del equipo.)`);
         }
       } else {
          setStatus(`¡Éxito en blockchain! (Advertencia: No se pudo obtener ID del desafío para guardar info de equipo) Tx: ${tx.hash.substring(0,10)}...`);
@@ -206,6 +205,7 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
     } catch (error: any) {
       console.error('Error en handleSubmit:', error);
       const reason = error?.reason || error?.data?.message || error?.message || 'Error desconocido';
+      // Mensajes de error Blockchain (sin cambios, son de MetaMask/contrato)
       if (error.code === 4001 || error.code === 'ACTION_REJECTED') { setStatus('Error: Transacción rechazada por el usuario.'); }
       else if (error.code === -32603) {
           if (reason.includes("insufficient funds")) { setStatus('Error: Fondos insuficientes para completar la transacción.'); }
@@ -215,7 +215,7 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
     } finally { setLoading(false); }
   };
 
-  // --- JSX ---
+  // --- JSX (Textos visibles modificados) ---
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center mb-6">
@@ -239,12 +239,11 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
                className="appearance-none w-full px-3 py-2 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
              >
                <option value="" disabled>
-                 {loadingTeams ? 'Cargando equipos...' : !account ? 'Inicia sesión (Supabase) primero' : userTeams.length === 0 ? 'No tienes equipos creados' : '-- Elige un equipo --'}
+                 {/* **MODIFICADO**: Texto genérico para el estado !account */}
+                 {loadingTeams ? 'Cargando equipos...' : !account ? 'Debes iniciar sesión primero' : userTeams.length === 0 ? 'No tienes equipos creados' : '-- Elige un equipo --'}
                </option>
-               {/* Mapea los equipos cargados */}
                {userTeams.map((team) => (
                  <option key={team.id} value={team.id.toString()}>
-                   {/* CORREGIDO: Muestra la columna 'Teams' */}
                    {team.Teams} {/* Muestra el nombre del equipo */}
                  </option>
                ))}
@@ -253,7 +252,6 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
                 <ChevronDown className="h-4 w-4" />
             </div>
           </div>
-          {/* ... (mensajes de ayuda y display de IDs cargados) ... */}
            {selectedTeamId && playerIds.length === 6 && (
             <div className="mt-2 text-xs text-gray-500 break-all">
               IDs cargados: {playerIds.join(', ')}
@@ -264,10 +262,11 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
             )}
             {loadingTeams && (<p className="text-xs text-blue-500 mt-1">Buscando tus equipos...</p>)}
             {!loadingTeams && userTeams.length === 0 && account && (<p className="text-xs text-orange-500 mt-1">No tienes equipos. Ve a la sección 'Crear Equipo'.</p>)}
-             {!account && (<p className="text-xs text-red-500 mt-1">Inicia sesión (Supabase) para ver y seleccionar tus equipos.</p>)}
+            {/* **MODIFICADO**: Texto genérico para el estado !account */}
+            {!account && (<p className="text-xs text-red-500 mt-1">Inicia sesión para ver y seleccionar tus equipos.</p>)}
         </div>
 
-        {/* Input Match ID (Opcional) */}
+        {/* Input Match ID (Opcional) (Sin cambios visuales) */}
         <div className="mb-6">
           <label htmlFor="match-id-input" className="block text-sm font-medium text-gray-700 mb-1">
             ID de Partida Predefinida (Opcional)
@@ -285,7 +284,7 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
           />
         </div>
 
-        {/* Mensaje de Estado */}
+        {/* Mensaje de Estado (Sin cambios en estructura, pero los textos que recibe ahora son genéricos) */}
         {status && (
           <div className={`mb-4 p-3 rounded-md text-sm ${
             status.startsWith('Error:') ? 'bg-red-100 text-red-700 border border-red-300' :
@@ -296,7 +295,7 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
           </div>
         )}
 
-        {/* Botón Submit */}
+        {/* Botón Submit (Sin cambios visuales) */}
         <button
           type="submit"
           disabled={loading || !account || !selectedTeamId || playerIds.length !== 6}
@@ -304,8 +303,9 @@ const CreateChallenge: React.FC<CreateChallengeProps> = ({
         >
           {loading ? 'Procesando...' : 'Crear Desafío (5 S)'}
         </button>
+        {/* Mensaje de ayuda si está deshabilitado (Sin cambios, "administrador" es suficientemente genérico) */}
          {(!account || !selectedTeamId || playerIds.length !== 6) && !loading && (
-            <p className="text-xs text-red-600 text-center mt-2">Debes iniciar sesión (Supabase) y seleccionar un equipo válido.</p>
+            <p className="text-xs text-red-600 text-center mt-2">Completa los pasos anteriores o verifica tu sesión para habilitar la creación.</p> // Ajustado levemente para ser más general
          )}
       </form>
     </div>

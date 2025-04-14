@@ -1,3 +1,15 @@
+/* src/index.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+body {
+  margin: 0; /* Opcional: Asegura que no haya márgenes por defecto */
+  min-height: 100vh; /* Asegura que el body ocupe al menos toda la altura de la ventana */
+  background: linear-gradient(to bottom, #00FF00, #000000); /* Gradiente de verde lima a negro */
+  /* Opcional: Si quieres que el gradiente no se repita si el contenido es muy largo */
+  background-repeat: no-repeat;
+   /* Opcional: Define un color de texto por defecto que contraste */
+  color: rgb(15, 86, 41);
+}
